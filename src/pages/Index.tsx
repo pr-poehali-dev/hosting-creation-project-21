@@ -76,6 +76,8 @@ const Index = () => {
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
   const [editContent, setEditContent] = useState('');
   const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [showPaymentConfirm, setShowPaymentConfirm] = useState(false);
+  const [paymentProgress, setPaymentProgress] = useState(0);
 
   useEffect(() => {
     if (currentServer && currentServer.status === 'online') {
@@ -102,29 +104,45 @@ const Index = () => {
       return;
     }
 
-    const domainMap: Record<string, string> = {
-      moscow: 'sdp1.superhost.ru:20183',
-      europe: 'eu.superhost.net:25565',
-      armenia: 'am.superhost.fum:29182',
-    };
-
-    const newServer: Server = {
-      id: `srv-${Date.now()}`,
-      name: selectedPlan.name,
-      plan: selectedPlan.name,
-      location,
-      status: 'offline',
-      cpu: 0,
-      ram: 0,
-      disk: 0,
-      domain: domainMap[location],
-    };
-
-    setServers([...servers, newServer]);
-    toast.success('Сервер успешно приобретён!');
     setShowPurchaseModal(false);
-    setShowDashboard(true);
-    setCurrentServer(newServer);
+    setShowPaymentConfirm(true);
+    setPaymentProgress(0);
+
+    const progressInterval = setInterval(() => {
+      setPaymentProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(progressInterval);
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 200);
+
+    setTimeout(() => {
+      const domainMap: Record<string, string> = {
+        moscow: 'sdp1.superhost.ru:20183',
+        europe: 'eu.superhost.net:25565',
+        armenia: 'am.superhost.fum:29182',
+      };
+
+      const newServer: Server = {
+        id: `srv-${Date.now()}`,
+        name: selectedPlan.name,
+        plan: selectedPlan.name,
+        location,
+        status: 'offline',
+        cpu: 0,
+        ram: 0,
+        disk: 0,
+        domain: domainMap[location],
+      };
+
+      setServers([...servers, newServer]);
+      toast.success('Сервер успешно приобретён!');
+      setShowPaymentConfirm(false);
+      setShowDashboard(true);
+      setCurrentServer(newServer);
+    }, 2500);
   };
 
   const handlePromoCode = () => {
@@ -435,7 +453,7 @@ const Index = () => {
               )}
 
               {activeTab === 'console' && (
-                <div className="space-y-4">
+                <div className="space-y-4 h-full flex flex-col">
                   {maintenanceMode && (
                     <Card className="border-yellow-500 bg-yellow-500/10">
                       <CardContent className="pt-6">
@@ -460,15 +478,46 @@ const Index = () => {
                       Рестарт
                     </Button>
                   </div>
-                  <Card className="bg-black/90 border-muted">
-                    <CardContent className="p-4">
-                      <ScrollArea className="h-96">
+                  <Card className="bg-black/90 border-muted flex-1 flex flex-col">
+                    <CardContent className="p-4 flex-1 flex flex-col">
+                      <ScrollArea className="flex-1 mb-4">
                         <div className="font-mono text-sm space-y-1">
                           {consoleOutput.map((line, i) => (
                             <div key={i} className="text-green-400">{line}</div>
                           ))}
                         </div>
                       </ScrollArea>
+                      {currentServer && (
+                        <div className="border-t border-muted pt-4 grid grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <div className="text-xs text-gray-500">CPU</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-green-400 font-mono font-bold">{currentServer.cpu.toFixed(1)}%</div>
+                              <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                                <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${currentServer.cpu}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs text-gray-500">RAM</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-green-400 font-mono font-bold">{currentServer.ram.toFixed(1)}%</div>
+                              <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                                <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${currentServer.ram}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs text-gray-500">DISK</div>
+                            <div className="flex items-center gap-2">
+                              <div className="text-green-400 font-mono font-bold">{currentServer.disk.toFixed(1)}%</div>
+                              <div className="flex-1 bg-gray-800 rounded-full h-1.5">
+                                <div className="bg-green-500 h-1.5 rounded-full transition-all" style={{ width: `${currentServer.disk}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -674,6 +723,40 @@ const Index = () => {
               <span className="text-2xl font-bold">{selectedPlan?.price}.00₽</span>
             </div>
             <Button className="w-full" onClick={handlePurchase}>Оплатить</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPaymentConfirm} onOpenChange={setShowPaymentConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Подтверждение оплаты</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="text-center">
+              <Icon name="CreditCard" className="w-16 h-16 mx-auto text-primary mb-4" />
+              <p className="text-lg font-medium mb-2">Обработка платежа...</p>
+              <p className="text-sm text-muted-foreground">Тариф: {selectedPlan?.name}</p>
+              <p className="text-2xl font-bold text-primary mt-4">{selectedPlan?.price}.00₽</p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Прогресс</span>
+                <span className="font-mono">{paymentProgress}%</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-3">
+                <div 
+                  className="bg-primary h-3 rounded-full transition-all duration-300"
+                  style={{ width: `${paymentProgress}%` }}
+                />
+              </div>
+            </div>
+            {paymentProgress === 100 && (
+              <div className="flex items-center justify-center gap-2 text-green-500">
+                <Icon name="CheckCircle" className="w-5 h-5" />
+                <span className="font-medium">Оплата успешно завершена!</span>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
